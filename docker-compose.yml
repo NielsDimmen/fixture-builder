@@ -1,0 +1,12 @@
+services:
+  fixture-builder:
+    build: .
+    ports:
+      - "8099:8099"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+      LIBRARY_PATH: /library
+      PORT: "8099"
+    volumes:
+      - "../Fixture Library:/library"

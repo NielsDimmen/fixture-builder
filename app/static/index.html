@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fixture Builder</title>
+  <link rel="stylesheet" href="static/styles.css">
+</head>
+<body>
+  <header>
+    <div>
+      <p class="eyebrow">dmXLAN</p>
+      <h1>Fixture Builder</h1>
+    </div>
+    <p id="status" class="status">Checking…</p>
+  </header>
+
+  <main>
+    <section class="panel">
+      <label class="dropzone" id="dropzone">
+        <input id="file" type="file" accept=".pdf,image/png,image/jpeg,image/webp">
+        <strong>Drop a PDF or photo</strong>
+        <span>DMX control table, PNG/JPG scan, or manufacturer PDF</span>
+        <em id="filename">No file selected</em>
+      </label>
+
+      <div class="row">
+        <label>
+          Manufacturer
+          <select id="manufacturer"></select>
+        </label>
+        <label>
+          New manufacturer
+          <input id="new-manufacturer" type="text" placeholder="Cameo">
+        </label>
+      </div>
+      <label>
+        Fixture name <span class="optional">optional</span>
+        <input id="fixture-name" type="text" placeholder="Zenit Z180 G2">
+      </label>
+      <button id="generate" type="button">Generate fixture</button>
+      <p id="extract-info" class="muted"></p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Preview</h2>
+        <div class="actions">
+          <button id="revalidate" type="button" class="ghost">Check syntax</button>
+          <button id="download" type="button" class="ghost">Download .txt</button>
+          <button id="append" type="button">Write to library</button>
+        </div>
+      </div>
+      <textarea id="preview" spellcheck="false" placeholder="Generated dmXLAN text appears here."></textarea>
+      <ul id="errors"></ul>
+    </section>
+  </main>
+
+  <script src="static/app.js"></script>
+</body>
+</html>
