@@ -50,7 +50,7 @@ def extract_pdf(data: bytes, filename: str, max_pages: int = 8) -> Extraction:
     pages: list[ExtractedPage] = []
     for i in chosen:
         page = doc[i]
-        pix = page.get_pixmap(matrix=fitz.Matrix(1.6, 1.6), alpha=False)
+        pix = page.get_pixmap(matrix=fitz.Matrix(1.1, 1.1), alpha=False)
         pages.append(
             ExtractedPage(
                 index=i + 1,

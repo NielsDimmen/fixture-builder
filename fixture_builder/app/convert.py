@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import base64
+import logging
+import re
 
-from openai import OpenAI
+from openai import APIError, APITimeoutError, AuthenticationError, OpenAI, RateLimitError
 
 from .validate import strip_code_fence, validate_dmxlan
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You convert lighting fixture DMX control tables into dmXLAN fixture library syntax.
 
@@ -60,13 +64,22 @@ parameter = Zoom
 range = 0, 255, Narrow to Wide
 """
 
+TEXT_RICH = re.compile(r"(?i)(\d+\s*ch|\bchannel\b|\bdimmer\b|\bstrobe\b|\brange\b|000\s*-\s*255)")
+
 
 def _image_part(png_bytes: bytes, content_type: str = "image/png") -> dict:
     b64 = base64.b64encode(png_bytes).decode("ascii")
     return {
         "type": "image_url",
-        "image_url": {"url": f"data:{content_type};base64,{b64}", "detail": "high"},
+        "image_url": {"url": f"data:{content_type};base64,{b64}", "detail": "low"},
     }
+
+
+def text_is_rich_enough(extracted_text: str) -> bool:
+    text = extracted_text or ""
+    if len(text) < 400:
+        return False
+    return len(TEXT_RICH.findall(text)) >= 3
 
 
 def build_user_prompt(
@@ -104,8 +117,16 @@ def generate_fixture_text(
     if not api_key:
         raise ValueError("OpenAI API key is missing. Set it in the add-on options or OPENAI_API_KEY.")
 
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key.strip(), timeout=120.0, max_retries=1)
     notes: list[str] = []
+    use_images = images
+    if text_is_rich_enough(extracted_text):
+        use_images = []
+        notes.append("Used extracted PDF text (skipped page images for speed/size).")
+    elif len(images) > 3:
+        use_images = images[:3]
+        notes.append("Limited to first 3 page images.")
+
     user_text = build_user_prompt(
         manufacturer=manufacturer,
         fixture_name=fixture_name,
@@ -113,7 +134,7 @@ def generate_fixture_text(
         style_sample=style_sample,
     )
     content: list[dict] = [{"type": "text", "text": user_text}]
-    for blob, mime in images:
+    for blob, mime in use_images:
         content.append(_image_part(blob, mime))
 
     text = _complete(client, model, content)
@@ -136,20 +157,35 @@ def generate_fixture_text(
         ),
     )
     retry_content: list[dict] = [{"type": "text", "text": retry_text}]
-    for blob, mime in images:
+    for blob, mime in use_images:
         retry_content.append(_image_part(blob, mime))
     text = _complete(client, model, retry_content)
     return text, notes
 
 
 def _complete(client: OpenAI, model: str, content: list[dict]) -> str:
-    response = client.chat.completions.create(
-        model=model,
-        temperature=0.1,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": content},
-        ],
-    )
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            temperature=0.1,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": content},
+            ],
+        )
+    except AuthenticationError as exc:
+        raise RuntimeError(
+            "OpenAI rejected the API key (401). Check openai_api_key in the add-on options."
+        ) from exc
+    except RateLimitError as exc:
+        raise RuntimeError("OpenAI rate limit or quota exceeded. Try again later.") from exc
+    except APITimeoutError as exc:
+        raise RuntimeError("OpenAI request timed out. Try a smaller PDF or fewer pages.") from exc
+    except APIError as exc:
+        raise RuntimeError(f"OpenAI API error: {exc.message or exc}") from exc
+    except Exception as exc:
+        logger.exception("OpenAI request failed")
+        raise RuntimeError(f"OpenAI request failed: {exc}") from exc
+
     choice = response.choices[0].message.content or ""
     return strip_code_fence(choice)

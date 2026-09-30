@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -12,6 +14,9 @@ from .extract import extract_upload, summarize_extraction
 from .library import append_fixtures, list_manufacturers, read_style_sample
 from .settings import load_settings
 from .validate import validate_dmxlan
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
 STATIC_DIR = Path(__file__).parent / "static"
 app = FastAPI(title="Fixture Builder")
@@ -35,9 +40,11 @@ def index() -> FileResponse:
 @app.get("/api/health")
 def health() -> dict:
     settings = load_settings()
+    key = settings.openai_api_key.strip()
     return {
         "ok": True,
-        "has_openai_key": bool(settings.openai_api_key),
+        "has_openai_key": bool(key),
+        "openai_key_hint": f"...{key[-4:]}" if len(key) >= 4 else "",
         "model": settings.openai_model,
         "library_path": settings.library_path,
     }
@@ -72,7 +79,10 @@ async def convert(
     data = await file.read()
     max_bytes = settings.max_upload_mb * 1024 * 1024
     if len(data) > max_bytes:
-        raise HTTPException(status_code=400, detail=f"File is larger than {settings.max_upload_mb} MB.")
+        return JSONResponse(
+            status_code=400,
+            content={"message": f"File is larger than {settings.max_upload_mb} MB."},
+        )
 
     try:
         extraction = extract_upload(
@@ -82,7 +92,10 @@ async def convert(
             max_pages=settings.max_pages,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse(status_code=400, content={"message": str(exc)})
+    except Exception as exc:
+        logger.exception("PDF/image extraction failed")
+        return JSONResponse(status_code=400, content={"message": f"Could not read upload: {exc}"})
 
     brand = manufacturer.strip()
     style = read_style_sample(settings.library_path, brand) if brand else ""
@@ -94,7 +107,8 @@ async def convert(
         images.append((page.png_bytes, mime))
 
     try:
-        text, notes = generate_fixture_text(
+        text, notes = await asyncio.to_thread(
+            generate_fixture_text,
             api_key=settings.openai_api_key,
             model=settings.openai_model,
             manufacturer=brand,
@@ -104,9 +118,10 @@ async def convert(
             style_sample=style,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse(status_code=400, content={"message": str(exc)})
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"OpenAI request failed: {exc}") from exc
+        logger.exception("Convert failed")
+        return JSONResponse(status_code=502, content={"message": str(exc)})
 
     result = validate_dmxlan(text)
     return JSONResponse(

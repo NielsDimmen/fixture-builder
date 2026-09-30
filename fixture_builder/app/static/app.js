@@ -37,9 +37,13 @@ async function api(path, options) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const detail = data.detail;
+    if (typeof data.message === "string" && data.message) throw new Error(data.message);
     if (typeof detail === "string") throw new Error(detail);
     if (detail && detail.message) throw new Error(detail.message);
-    throw new Error(data.message || `Request failed (${response.status})`);
+    if (Array.isArray(detail)) {
+      throw new Error(detail.map((item) => item.msg || JSON.stringify(item)).join("; "));
+    }
+    throw new Error(`Request failed (${response.status})`);
   }
   return data;
 }
@@ -59,7 +63,7 @@ async function loadHealth() {
   try {
     const data = await api("api/health");
     statusEl.textContent = data.has_openai_key
-      ? `OpenAI ready · ${data.model}`
+      ? `OpenAI ready · ${data.model}${data.openai_key_hint ? ` · ${data.openai_key_hint}` : ""}`
       : "Set openai_api_key in add-on options";
   } catch (error) {
     statusEl.textContent = error.message;
