@@ -1,6 +1,6 @@
 services:
   fixture-builder:
-    build: .
+    build: ./fixture_builder
     ports:
       - "8099:8099"
     environment:

@@ -4,7 +4,29 @@ Home Assistant add-on that turns a DMX control table (PDF or photo) into dmXLAN 
 
 Upload a table, preview the generated `.txt`, download it, or append it to the fixture library on HA.
 
-## Local test (Mac)
+## Install from GitHub (recommended)
+
+1. In Home Assistant: **Settings → Add-ons → Add-on Store → ⋮ → Repositories**
+2. Add:
+
+```text
+https://github.com/NielsDimmen/fixture-builder
+```
+
+3. Reload the store, open **Fixture Builder**, set `openai_api_key`, start the add-on.
+4. Optional: copy manufacturer `.txt` files into `/share/dmxlan` if you want append-to-library.
+
+This repository is a valid Home Assistant app repository (`repository.yaml` + `fixture_builder/` add-on folder).
+
+## Local install without GitHub
+
+```bash
+./scripts/pack-ha-addon.sh --scp
+```
+
+Then reload the Add-on Store and install the local **Fixture Builder**.
+
+## Local test on Mac
 
 ```bash
 cp .env.example .env
@@ -12,32 +34,13 @@ cp .env.example .env
 
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt pytest
+pip install -r fixture_builder/requirements.txt pytest
 pytest -q
 
 docker compose up --build
 ```
 
-Open [http://127.0.0.1:8099](http://127.0.0.1:8099). The compose file mounts `../Fixture Library` as `/library`.
-
-## Install on Home Assistant
-
-1. Copy the add-on onto the HA machine:
-
-```bash
-./scripts/pack-ha-addon.sh --scp
-```
-
-Or manually:
-
-```bash
-scp -r "/Users/niels/Documents/dmXLAN Files/fixture-builder" root@homeassistant.local:/addons/fixture_builder
-```
-
-2. In Home Assistant: **Settings → Add-ons → Add-on Store → ⋮ → Reload**.
-3. Open the local add-on **Fixture Builder**, set `openai_api_key`, and optionally point `library_path` at `/share/dmxlan`.
-4. Copy your manufacturer `.txt` files into `/share/dmxlan` (Samba/share) if you want append-to-library.
-5. Start the add-on. It appears in the sidebar.
+Open [http://127.0.0.1:8099](http://127.0.0.1:8099). Compose mounts `../Fixture Library` as `/library`.
 
 dmXLAN does not auto-reload the library. After writing a file, copy it into the folder dmXLAN actually reads.
 
